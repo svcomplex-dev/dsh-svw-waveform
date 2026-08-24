@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+required_email=code@svcomplex.ai
+author_ident=$(git var GIT_AUTHOR_IDENT)
+committer_ident=$(git var GIT_COMMITTER_IDENT)
+case "$author_ident" in *"<$required_email>"*) ;; *) echo "error: Git author email must be $required_email" >&2; exit 1;; esac
+case "$committer_ident" in *"<$required_email>"*) ;; *) echo "error: Git committer email must be $required_email" >&2; exit 1;; esac

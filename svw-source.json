@@ -1,0 +1,14 @@
+{
+  "release": "release-0.1.0",
+  "asset": "svw-release-0.1.0-linux-x64.tar.gz",
+  "files": {
+    "index.js": "3a0c2c3b13dcae447a9c94dbbd4e7ffe8187f6e1f48b9bee3457b412f8be35d9",
+    "client.cjs": "bfddceb9293b88463899d1d919a96f08866d51d4855ca327fea103d57c409f9e",
+    "skills/svw-waveform/SKILL.md": "8cd62e6ca652419a0b37aa06ac4b5ae804864150109fecde75fc9136ef6d6a75"
+  },
+  "downstreamTransforms": [
+    "resolve the package-private SVW runtime",
+    "rename the browser module to dsh-svw-waveform",
+    "advertise only VCD and FST waveform inputs"
+  ]
+}

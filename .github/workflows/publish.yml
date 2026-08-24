@@ -1,0 +1,173 @@
+name: Publish npm packages
+
+on:
+  repository_dispatch:
+    types: [svw-release-published]
+  workflow_dispatch:
+    inputs:
+      svw_release:
+        description: Exact SVW tag (release-X.Y.Z)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  SVW_RELEASE_TAG: ${{ github.event.client_payload.tag || inputs.svw_release }}
+
+jobs:
+  verify-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux-x64
+          - runner: macos-15
+            platform: macos-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate release input
+        shell: bash
+        run: |
+          set -eu
+          printf '%s\n' "$SVW_RELEASE_TAG" | grep -Eq '^release-(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+      - name: Import, smoke test, and audit SVW
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: sh scripts/import-svw-asset.sh "$SVW_RELEASE_TAG" "$PLATFORM" ".tmp/$PLATFORM"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: svw-${{ matrix.platform }}
+          path: .tmp/${{ matrix.platform }}
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: verify-platform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.15.0"
+          package-manager-cache: false
+      - name: Install npm with trusted publishing support
+        run: npm install --global npm@11.16.0
+      - uses: actions/download-artifact@v5
+        with:
+          name: svw-linux-x64
+          path: .tmp/import/linux-x64
+      - uses: actions/download-artifact@v5
+        with:
+          name: svw-macos-arm64
+          path: .tmp/import/macos-arm64
+      - name: Prepare exact package sources and manifests
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod 0755 .tmp/import/linux-x64/bin/svw .tmp/import/macos-arm64/bin/svw
+          for source in index.js client.cjs skills/svw-waveform/SKILL.md; do
+            cmp ".tmp/import/linux-x64/integration/$source" \
+              ".tmp/import/macos-arm64/integration/$source"
+          done
+          node scripts/prepare-svw-release.mjs "$SVW_RELEASE_TAG" .tmp/import
+          skipped=$(awk -F= '$1 == "skipped_older" { value = $2 } END { print value }' "$GITHUB_OUTPUT")
+          if [ "$skipped" = true ]; then
+            exit 0
+          fi
+          node scripts/sync-svw-integration.mjs \
+            .tmp/import/linux-x64/integration "$SVW_RELEASE_TAG"
+          mkdir -p npm/linux-x64/bin npm/darwin-arm64/bin
+          cp .tmp/import/linux-x64/bin/svw npm/linux-x64/bin/svw
+          cp .tmp/import/macos-arm64/bin/svw npm/darwin-arm64/bin/svw
+          chmod 0755 npm/linux-x64/bin/svw npm/darwin-arm64/bin/svw
+          npm install --package-lock-only --force --ignore-scripts --legacy-peer-deps
+          npm run verify
+          sh scripts/setup-git-hooks.sh
+      - name: Commit the immutable SVW coordinate
+        if: steps.prepare.outputs.skipped_older != 'true'
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.prepare.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          git add package.json package-lock.json index.js client.cjs svw-source.json \
+            skills/svw-waveform/SKILL.md \
+            npm/linux-x64/package.json npm/linux-x64/svw-provenance.json \
+            npm/darwin-arm64/package.json npm/darwin-arm64/svw-provenance.json
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m "release: track svw $SVW_RELEASE_TAG"
+            scripts/check-commit-emails.sh HEAD
+            git push origin HEAD:main
+          fi
+          test "$(node -p "require('./package.json').version")" = "$PACKAGE_VERSION"
+      - name: Pack and verify executable payloads
+        if: steps.prepare.outputs.skipped_older != 'true'
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/packages .tmp/unpack
+          linux=$(npm pack --workspace npm/linux-x64 --pack-destination .tmp/packages --silent)
+          darwin=$(npm pack --workspace npm/darwin-arm64 --pack-destination .tmp/packages --silent)
+          entry=$(npm pack --pack-destination .tmp/packages --silent)
+          for item in "$linux" "$darwin"; do
+            destination=".tmp/unpack/$item"
+            mkdir -p "$destination"
+            tar -xzf ".tmp/packages/$item" -C "$destination"
+            test -x "$destination/package/bin/svw"
+          done
+          printf 'linux=%s\ndarwin=%s\nentry=%s\n' "$linux" "$darwin" "$entry" >> "$GITHUB_OUTPUT"
+      - name: Publish platform packages before the entry bundle
+        if: steps.prepare.outputs.skipped_older != 'true'
+        shell: bash
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/dsh-svw-npmrc
+          PACKAGE_VERSION: ${{ steps.prepare.outputs.package_version }}
+          LINUX_TGZ: ${{ steps.pack.outputs.linux }}
+          DARWIN_TGZ: ${{ steps.pack.outputs.darwin }}
+          ENTRY_TGZ: ${{ steps.pack.outputs.entry }}
+        run: |
+          set -euo pipefail
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$NPM_CONFIG_USERCONFIG"
+            chmod 0600 "$NPM_CONFIG_USERCONFIG"
+          else
+            rm -f "$NPM_CONFIG_USERCONFIG"
+          fi
+          publish_one() {
+            package=$1
+            archive=$2
+            if npm view "$package@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+              echo "$package@$PACKAGE_VERSION already exists"
+            else
+              npm publish ".tmp/packages/$archive" --access public --provenance
+            fi
+          }
+          publish_one dsh-svw-waveform-linux-x64 "$LINUX_TGZ"
+          publish_one dsh-svw-waveform-darwin-arm64 "$DARWIN_TGZ"
+          publish_one dsh-svw-waveform "$ENTRY_TGZ"
+      - name: Push annotated package tag after publication
+        if: steps.prepare.outputs.skipped_older != 'true'
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.prepare.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          tag="v$PACKAGE_VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "$tag already exists"
+          else
+            git tag -a "$tag" -m "dsh-svw-waveform $PACKAGE_VERSION for $SVW_RELEASE_TAG"
+            git push origin "refs/tags/$tag"
+          fi

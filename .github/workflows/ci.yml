@@ -1,0 +1,74 @@
+name: Package CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux-x64
+            workspace: npm/linux-x64
+          - runner: macos-15
+            platform: macos-arm64
+            workspace: npm/darwin-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.15.0"
+          package-manager-cache: false
+      - name: Verify source package contracts
+        run: npm run verify
+      - name: Import and verify the pinned SVW artifact
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          release=$(node -p "require('./package.json').svwRelease")
+          expected=$(node -p "require('./package.json').svwArtifacts['$PLATFORM'].archiveSha256")
+          SVW_EXPECTED_ARCHIVE_SHA256="$expected" \
+            sh scripts/import-svw-asset.sh "$release" "$PLATFORM" ".tmp/$PLATFORM"
+          destination="${{ matrix.workspace }}/bin"
+          mkdir -p "$destination"
+          cp ".tmp/$PLATFORM/bin/svw" "$destination/svw"
+          chmod 0755 "$destination/svw"
+          npm run verify
+      - name: Verify packed entry and platform payloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --dry-run
+          npm pack --workspace "${{ matrix.workspace }}" --dry-run
+
+  dsh-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.15.0"
+          package-manager-cache: false
+      - name: Install the pinned Harness CLI
+        run: npm install --global npm@11.16.0 pnpm@11.7.0 @deepseek-ai/dsh@0.1.1-rc.2
+      - name: Install the packed bundle into a clean profile
+        shell: bash
+        env:
+          DSH_HOME: ${{ runner.temp }}/dsh-home
+        run: |
+          set -euo pipefail
+          package=$(npm pack --silent)
+          dsh plugin --profile web add "$PWD/$package"
+          dsh --profile web --dump-config > "$RUNNER_TEMP/dsh-config.txt"
+          grep -A3 "svw-waveform" "$RUNNER_TEMP/dsh-config.txt"

@@ -1,0 +1,81 @@
+{
+  "name": "dsh-svw-waveform",
+  "version": "0.1.0",
+  "description": "Native SVW waveform rendering plugin for DeepSeek Harness",
+  "svwRelease": "release-0.1.0",
+  "svwArtifacts": {
+    "linux-x64": {
+      "asset": "svw-release-0.1.0-linux-x64.tar.gz",
+      "archiveSha256": "d3e90e7a50afc85c1038935d89685a2bc15f3167090c62777f5f93a26b309747",
+      "binarySha256": "ec27bdad1be76f2b9cb878740b544d7983cdcdac155a44ffa824f8f124b89175"
+    },
+    "macos-arm64": {
+      "asset": "svw-release-0.1.0-macos-arm64.tar.gz",
+      "archiveSha256": "3d8dadfb87e84ede95b9356d567f0e2368afa503c0aa09930dd6b70d311210e3",
+      "binarySha256": "625e1a1b9823f280fc4d03088fd8aa02c2380c97b95bf691ce5a34cfffffd049"
+    }
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.cjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.cjs",
+    "lib",
+    "skills",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "svw-source.json"
+  ],
+  "workspaces": [
+    "npm/*"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "verify": "node scripts/verify-package.mjs && node --test",
+    "verify:identity": "sh test/git-hooks.sh"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "systemverilog",
+    "waveform",
+    "vcd",
+    "fst",
+    "eda"
+  ],
+  "author": "SVComplex",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/svcomplex-dev/dsh-svw-waveform.git"
+  },
+  "bugs": {
+    "url": "https://github.com/svcomplex-dev/dsh-svw-waveform/issues"
+  },
+  "homepage": "https://github.com/svcomplex-dev/dsh-svw-waveform#readme",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-tool"
+      ]
+    }
+  },
+  "optionalDependencies": {
+    "dsh-svw-waveform-linux-x64": "0.1.0",
+    "dsh-svw-waveform-darwin-arm64": "0.1.0"
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  }
+}

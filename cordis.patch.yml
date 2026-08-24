@@ -1,0 +1,4 @@
+# Register the native SVW host tool and its optional web client view.
+- insert:
+    - id: svw-waveform
+      name: 'dsh-svw-waveform'

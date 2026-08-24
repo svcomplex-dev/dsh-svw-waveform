@@ -1,0 +1,20 @@
+{
+  "name": "dsh-svw-waveform-darwin-arm64",
+  "version": "0.1.0",
+  "description": "macOS arm64 SVW runtime for dsh-svw-waveform",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/svcomplex-dev/dsh-svw-waveform.git",
+    "directory": "npm/darwin-arm64"
+  },
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "files": ["bin/svw", "svw-provenance.json"],
+  "exports": {
+    "./package.json": "./package.json",
+    "./bin/svw": "./bin/svw",
+    "./svw-provenance.json": "./svw-provenance.json"
+  },
+  "preferUnplugged": true
+}
