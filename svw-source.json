@@ -1,10 +1,10 @@
 {
-  "release": "release-0.1.0",
-  "asset": "svw-release-0.1.0-linux-x64.tar.gz",
+  "release": "release-0.1.1",
+  "asset": "svw-release-0.1.1-linux-x64.tar.gz",
   "files": {
-    "index.js": "3a0c2c3b13dcae447a9c94dbbd4e7ffe8187f6e1f48b9bee3457b412f8be35d9",
-    "client.cjs": "bfddceb9293b88463899d1d919a96f08866d51d4855ca327fea103d57c409f9e",
-    "skills/svw-waveform/SKILL.md": "8cd62e6ca652419a0b37aa06ac4b5ae804864150109fecde75fc9136ef6d6a75"
+    "index.js": "d2763d30c50fe8288ec21fdd9e70d295b7be812b91c4bac9256c20d84fda7465",
+    "client.cjs": "d6cb025247fa90123314aa7ca796aa06b69dedb076e30b519f6a88566510147c",
+    "skills/svw-waveform/SKILL.md": "ca4de47b01e767d7f25a08ac73044d65efc16485d8e2873e0d28f3340e7fdae9"
   },
   "downstreamTransforms": [
     "resolve the package-private SVW runtime",

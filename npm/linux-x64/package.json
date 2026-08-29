@@ -1,6 +1,6 @@
 {
   "name": "dsh-svw-waveform-linux-x64",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Linux x64 SVW runtime for dsh-svw-waveform",
   "license": "MIT",
   "repository": {
@@ -8,9 +8,16 @@
     "url": "git+https://github.com/svcomplex-dev/dsh-svw-waveform.git",
     "directory": "npm/linux-x64"
   },
-  "os": ["linux"],
-  "cpu": ["x64"],
-  "files": ["bin/svw", "svw-provenance.json"],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin/svw",
+    "svw-provenance.json"
+  ],
   "exports": {
     "./package.json": "./package.json",
     "./bin/svw": "./bin/svw",

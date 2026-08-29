@@ -1,18 +1,18 @@
 {
   "name": "dsh-svw-waveform",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Native SVW waveform rendering plugin for DeepSeek Harness",
-  "svwRelease": "release-0.1.0",
+  "svwRelease": "release-0.1.1",
   "svwArtifacts": {
     "linux-x64": {
-      "asset": "svw-release-0.1.0-linux-x64.tar.gz",
-      "archiveSha256": "d3e90e7a50afc85c1038935d89685a2bc15f3167090c62777f5f93a26b309747",
-      "binarySha256": "ec27bdad1be76f2b9cb878740b544d7983cdcdac155a44ffa824f8f124b89175"
+      "asset": "svw-release-0.1.1-linux-x64.tar.gz",
+      "archiveSha256": "3e203c75f023090c98bbbd679ff34838c2885b15689e0290e88590409c93f0ab",
+      "binarySha256": "ea75984daa17d634f19727e39c4b797779059130bc8983880c2b497c83fcbddb"
     },
     "macos-arm64": {
-      "asset": "svw-release-0.1.0-macos-arm64.tar.gz",
-      "archiveSha256": "3d8dadfb87e84ede95b9356d567f0e2368afa503c0aa09930dd6b70d311210e3",
-      "binarySha256": "625e1a1b9823f280fc4d03088fd8aa02c2380c97b95bf691ce5a34cfffffd049"
+      "asset": "svw-release-0.1.1-macos-arm64.tar.gz",
+      "archiveSha256": "782d83224924008fd862241bd6fae85f978082fd6922bd4cf23aaee757fa518d",
+      "binarySha256": "2ca7e0743eb6c11f8f2276c94c7ff5ec6ba985aa604aaa85ccd676ff896dec30"
     }
   },
   "type": "module",
@@ -72,8 +72,8 @@
     }
   },
   "optionalDependencies": {
-    "dsh-svw-waveform-linux-x64": "0.1.0",
-    "dsh-svw-waveform-darwin-arm64": "0.1.0"
+    "dsh-svw-waveform-linux-x64": "0.1.1",
+    "dsh-svw-waveform-darwin-arm64": "0.1.1"
   },
   "engines": {
     "node": ">=22.14.0"

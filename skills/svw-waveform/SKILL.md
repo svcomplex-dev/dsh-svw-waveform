@@ -4,7 +4,7 @@ description: Inspect and compare waveforms and mxsv semantic design bundles with
 compatibility: codex, opencode, pi, deepseek harness, and other agents with shell access or svw MCP tools
 metadata:
   author: svw
-  version: "14"
+  version: "15"
 ---
 
 # svw waveform analysis
@@ -32,8 +32,9 @@ available. Otherwise use the composable `svw agent` CLI below. Run
    svw agent WAVEFORM signals top.cpu.valid 20 'svw1.…'
    ```
 
-3. Each search result contains both a full hierarchical `name` and a stable
-   `signal:` ID. Keep the ID for exact value, change, cross-probe, and other
+3. Each search result contains a full hierarchical `name`, a readable
+   `type_name`, the legacy numeric `type`, and a stable `signal:` ID. Keep the
+   ID for exact value, change, cross-probe, and other
    evidence queries; do not synthesize or repair it. Times are integer native
    ticks; interpret them with the
    common `time_context` returned by every successful read-only tool. Convert
@@ -66,9 +67,10 @@ available. Otherwise use the composable `svw agent` CLI below. Run
    change marks the top and bottom rails with aligned `│` separators. The
    matching value-row cell is a neutral blank gap rather than a through-line,
    so neither a glyph nor X/Z tint crosses the boundary. Multiple changes collapsed into one display
-   cell use `▓` rail activity markers. X, Z, and mixed-unknown
-   bus ranges use red, orange, and gray patterned rectangles with continuous
-   background tint. Stable single-bit X/Z ranges also carry centered lowercase
+   cell use `▓` rail activity markers. Plain output uses sparse `x`, `z`, and
+   `?` patterns for X, Z, and mixed-unknown bus fills; ANSI output uses red, orange,
+   and gray patterned rectangles with continuous background tint. Stable
+   single-bit X/Z ranges also carry centered lowercase
    `x`/`z` labels so their state remains explicit when color alone is
    insufficient. Bus separators use the same nearest-column rounding as ruler
    markers. The complete marker column is the final render layer, so adjacent
@@ -115,8 +117,11 @@ svw agent - design-objects BUNDLE top.cpu.reset variable 20
 svw agent - design-source BUNDLE DESIGN_OBJECT_ID 5
 ```
 
-Copy the returned `design-object:` ID. To map it to a loaded waveform, or map a
-signal in the other direction:
+Without a `kind` filter, object search returns one canonical,
+non-port-preferred object per elaborated path. Supply an exact `kind` to inspect
+the port and variable semantic projections separately. Copy the returned
+`design-object:` ID. To map it to a loaded waveform, or map a signal in the
+other direction:
 
 ```sh
 svw agent WAVEFORM xprobe-object BUNDLE DESIGN_OBJECT_ID
@@ -189,6 +194,12 @@ svw agent - coverage-info COVERAGE_XML
 svw agent - coverage-runs COVERAGE_XML '' '' 25
 svw agent - coverage-points COVERAGE_XML branch uncovered '' '' 25
 ```
+
+Coverage point `kind` is one of `block`, `branch`, `condition`, `fsm-state`,
+`fsm-transition`, `toggle`, `assertion`, `coverpoint`, or `cross`; `status` is
+`any`, `covered`, `uncovered`, or `excluded`. Omit an MCP filter rather than
+passing an empty value. In the positional CLI, `''` is an accepted placeholder
+for an omitted earlier filter.
 
 MCP also accepts up to 32 documents in one transactional `coverage_load` and
 then exposes `coverage_info`, `coverage_runs`, and `coverage_points`. Coverage
