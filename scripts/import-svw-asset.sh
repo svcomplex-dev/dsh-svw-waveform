@@ -127,23 +127,48 @@ extract_regular share/svw/agents/skills/svw-waveform/SKILL.md \
 
 case "$platform" in
   linux-x64)
-    ldd "$output_dir/bin/svw" > "$output_dir/dynamic-libraries.txt"
-    ! grep -q "not found" "$output_dir/dynamic-libraries.txt"
-    ! grep -Eiq 'libstdc\+\+|libc\+\+|libc\+\+abi|libunwind|libz3|libfmt|libmimalloc' \
-      "$output_dir/dynamic-libraries.txt"
-    awk '
-      /=> \// {
-        path = $3
-        if (path !~ /^\/lib(32|64)?\// && path !~ /^\/usr\/lib(32|64)?\//) exit 1
-      }
-      /^\// {
-        path = $1
-        if (path !~ /^\/lib(32|64)?\// && path !~ /^\/usr\/lib(32|64)?\//) exit 1
-      }
-    ' "$output_dir/dynamic-libraries.txt" || {
-      echo "Linux binary has a non-system dynamic dependency" >&2
+    command -v readelf >/dev/null 2>&1 || {
+      echo "readelf is required to audit the Linux executable" >&2
       exit 1
     }
+    elf_header="$tmp_dir/elf-header.txt"
+    elf_program_headers="$tmp_dir/elf-program-headers.txt"
+    elf_dynamic="$tmp_dir/elf-dynamic.txt"
+    readelf -hW "$output_dir/bin/svw" > "$elf_header"
+    grep -Eq 'Class:[[:space:]]+ELF64' "$elf_header" &&
+      grep -Eq 'Type:[[:space:]]+(EXEC|DYN)' "$elf_header" &&
+      grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64' "$elf_header" || {
+      echo "Linux binary is not an x86-64 ELF executable" >&2
+      exit 1
+    }
+    readelf -lW "$output_dir/bin/svw" > "$elf_program_headers"
+    readelf -dW "$output_dir/bin/svw" > "$elf_dynamic"
+    if grep -Fq '(NEEDED)' "$elf_dynamic"; then
+      ldd "$output_dir/bin/svw" > "$output_dir/dynamic-libraries.txt"
+      ! grep -q "not found" "$output_dir/dynamic-libraries.txt"
+      ! grep -Eiq 'libstdc\+\+|libc\+\+|libc\+\+abi|libunwind|libz3|libfmt|libmimalloc' \
+        "$output_dir/dynamic-libraries.txt"
+      awk '
+        /=> \// {
+          path = $3
+          if (path !~ /^\/lib(32|64)?\// && path !~ /^\/usr\/lib(32|64)?\//) exit 1
+        }
+        /^\// {
+          path = $1
+          if (path !~ /^\/lib(32|64)?\// && path !~ /^\/usr\/lib(32|64)?\//) exit 1
+        }
+      ' "$output_dir/dynamic-libraries.txt" || {
+        echo "Linux binary has a non-system dynamic dependency" >&2
+        exit 1
+      }
+    else
+      ! grep -Eq '^[[:space:]]*INTERP[[:space:]]' "$elf_program_headers" || {
+        echo "Linux binary has an interpreter but no declared dependencies" >&2
+        exit 1
+      }
+      printf '%s\n' 'statically linked (no PT_INTERP or DT_NEEDED)' \
+        > "$output_dir/dynamic-libraries.txt"
+    fi
     ;;
   macos-arm64)
     lipo -archs "$output_dir/bin/svw" | grep -Eq '(^|[[:space:]])arm64($|[[:space:]])'
