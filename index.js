@@ -21,16 +21,38 @@
 // runtime dependencies on `@deepseek-ai/*` packages.
 
 import { execFile } from "node:child_process";
-import { resolveSvwBinary } from "./lib/resolve-svw.js";
+import { resolveSvwBinary as resolvePackagedSvwBinary } from "./lib/resolve-svw.js";
+import { accessSync, constants } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const MAX_FRAME_BYTES = 512 * 1024;
 const SGR_SEQUENCE = /\x1b\[[0-9;]*m/g;
+const WAVE_TIME = /^(?:[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:s|ms|us|ns|ps|fs)|cycle:\d+@.+)$/;
 
 const name = "svw-waveform";
 const inject = ["tools"];
 
 function normalizeWaveformPath(path) {
 	return path.startsWith("@") ? path.slice(1) : path;
+}
+
+function resolveSvwBinary() {
+	const configured = process.env.SVW_BIN?.trim();
+	if (configured) return configured;
+	const here = dirname(fileURLToPath(import.meta.url));
+	for (const candidate of [
+		join(here, "vendor", "bin", "svw"),
+		join(here, "..", "vendor", "bin", "svw"),
+	]) {
+		try {
+			accessSync(candidate, constants.X_OK);
+			return candidate;
+		} catch {
+			// Continue to the next package layout, then fall back to PATH.
+		}
+	}
+	return "svw";
 }
 
 // Column width of one already-stripped line: most terminals render the svw
@@ -80,11 +102,13 @@ function validateParams(params) {
 		throw new Error("waveform must be a non-empty waveform path");
 	}
 	for (const key of ["start", "end"]) {
-		if (!Number.isInteger(params[key])) {
-			throw new Error(`${key} must be an integer native waveform tick`);
+		if (!Number.isInteger(params[key]) &&
+			!(typeof params[key] === "string" && WAVE_TIME.test(params[key]))) {
+			throw new Error(`${key} must be a native tick, SI time, or clock cycle`);
 		}
 	}
-	if (params.end <= params.start) {
+	if (Number.isInteger(params.start) && Number.isInteger(params.end) &&
+		params.end <= params.start) {
 		throw new Error("end must be greater than start");
 	}
 	if (
@@ -137,8 +161,14 @@ const definition = {
 				type: "string",
 				description: "VCD or FST waveform path",
 			},
-			start: { type: "integer", description: "Inclusive starting native waveform tick" },
-			end: { type: "integer", description: "Inclusive ending native waveform tick" },
+			start: {
+				oneOf: [{ type: "integer" }, { type: "string" }],
+				description: "Inclusive native tick, SI time such as 200ns, or cycle:N@clock",
+			},
+			end: {
+				oneOf: [{ type: "integer" }, { type: "string" }],
+				description: "Inclusive native tick, SI time such as 200ns, or cycle:N@clock",
+			},
 			hier: {
 				type: "array",
 				items: { type: "string" },
@@ -165,6 +195,7 @@ const definition = {
 				width: { type: "integer" },
 				height: { type: "integer" },
 				signals: { type: "integer" },
+				sampleText: { type: "string", description: "Compact final-value table for the model" },
 				hier: {
 					type: "array",
 					items: { type: "string" },
@@ -215,7 +246,7 @@ const definition = {
 			},
 			required: [
 				"ansi", "waveform", "start", "end", "width", "height",
-				"signals", "hier", "wave", "timeContext",
+				"signals", "sampleText", "hier", "wave", "timeContext",
 			],
 		},
 		// The model receives only a bounded summary; the full canvas reaches the
@@ -227,8 +258,8 @@ const definition = {
 					text:
 						`Rendered the complete ${value.width}x${value.height} svw wave canvas for ` +
 						`${value.signals} signal(s) over native ticks ${value.start}..${value.end}. ` +
-						"The colored frame is displayed by the DeepSeek Harness integration and is " +
-						"intentionally not duplicated in model text.",
+						"The colored frame is displayed by the DeepSeek Harness integration. " +
+						`Compact final values:\n${value.sampleText}`,
 				},
 			];
 		},
@@ -256,7 +287,7 @@ const definition = {
 		const width = params.width ?? 100;
 		const height = params.height ?? Math.max(14, Math.min(80, 10 + params.hier.length * 4));
 		const waveform = normalizeWaveformPath(params.waveform);
-		const binary = resolveSvwBinary();
+		const binary = resolvePackagedSvwBinary();
 		const stdout = await runSvw(
 			binary,
 			[
@@ -274,23 +305,37 @@ const definition = {
 				"ansi",
 				"--view",
 				"wave",
+				"--json",
 			],
 			exec.signal,
 		);
+		let envelope;
+		try {
+			envelope = JSON.parse(stdout);
+		} catch {
+			throw new Error("svw returned an invalid render JSON envelope");
+		}
+		if (typeof envelope.styled_text !== "string" || typeof envelope.sample_text !== "string") {
+			throw new Error("svw render JSON is missing styled_text or sample_text");
+		}
 		const canvasHeight = 1 + params.hier.length * 4;
-		validateFrame(stdout, canvasHeight, width);
+		validateFrame(envelope.styled_text, canvasHeight, width);
+		if (!Number.isInteger(envelope.start) || !Number.isInteger(envelope.end)) {
+			throw new Error("svw render JSON is missing resolved native times");
+		}
 		const { wave, timeContext } = await collectWaveData(
-			runSvw, binary, waveform, params.hier, params.start, params.end,
+			runSvw, binary, waveform, params.hier, envelope.start, envelope.end,
 			META_CHANGES_LIMIT, exec.signal,
 		);
 		return {
-			ansi: stdout,
+			ansi: envelope.styled_text,
 			waveform,
-			start: params.start,
-			end: params.end,
+			start: envelope.start,
+			end: envelope.end,
 			width,
 			height: canvasHeight,
 			signals: params.hier.length,
+			sampleText: envelope.sample_text,
 			hier: [...params.hier],
 			wave,
 			timeContext,
@@ -414,4 +459,5 @@ export {
 	validateFrame,
 	validateParams,
 	visibleWidth,
+	resolveSvwBinary,
 };

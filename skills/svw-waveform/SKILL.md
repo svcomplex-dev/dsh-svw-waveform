@@ -4,7 +4,7 @@ description: Inspect and compare waveforms and mxsv semantic design bundles with
 compatibility: codex, opencode, pi, deepseek harness, and other agents with shell access or svw MCP tools
 metadata:
   author: svw
-  version: "15"
+  version: "18"
 ---
 
 # svw waveform analysis
@@ -13,6 +13,26 @@ Use the native MCP tools when `wave_open`, `signals_search`, `wave_render`,
 `design_load`, `design_objects_search`, `design_source`, and `xprobe_*` are
 available. Otherwise use the composable `svw agent` CLI below. Run
 `svw agent --help` if the executable's current syntax is uncertain.
+
+## Resolve the executable first
+
+Do not assume `svw` is on `PATH`. Prefer an explicit executable in this order:
+
+1. a non-empty `SVW_BIN` environment variable naming an executable;
+2. the npm package's `vendor/bin/svw` (for `pi-svw-waveform`, this is at the
+   package root; from `skills/svw-waveform/SKILL.md` it is
+   `../../vendor/bin/svw`);
+3. `svw` found by `command -v`.
+
+Resolve that path once, keep it quoted, and substitute it for the leading
+`svw` in every shell example below. A typical npm-installed invocation is:
+
+```sh
+"/absolute/path/to/node_modules/pi-svw-waveform/vendor/bin/svw" agent WAVEFORM info
+```
+
+If none of those candidates exists and is executable, report the missing
+binary instead of trying to parse the waveform with another tool.
 
 ## Workflow
 
@@ -35,17 +55,38 @@ available. Otherwise use the composable `svw agent` CLI below. Run
 3. Each search result contains a full hierarchical `name`, a readable
    `type_name`, the legacy numeric `type`, and a stable `signal:` ID. Keep the
    ID for exact value, change, cross-probe, and other
-   evidence queries; do not synthesize or repair it. Times are integer native
-   ticks; interpret them with the
-   common `time_context` returned by every successful read-only tool. Convert
-   exactly as `physical_fs = tick * femtoseconds_per_tick`; do not infer a unit
-   when `time_context.available` is false:
+   evidence queries; do not synthesize or repair it. Time arguments accept a
+   native integer tick, an SI value such as `200ns`, or
+   `cycle:N@exact.clock.hier` (cycle zero is the first final-value 0-to-1
+   edge). Prefer SI/cycle forms over manual tick arithmetic. Results still
+   return native ticks plus the common `time_context`, including exact
+   `femtoseconds_per_tick`; do not infer a unit when `time_context.available`
+   is false:
 
    ```sh
-   svw agent WAVEFORM value SIGNAL_ID 125
-   svw agent WAVEFORM changes SIGNAL_ID 100 160 100
-   svw agent WAVEFORM changes SIGNAL_ID 100 160 100 'svw1.…'
+   svw agent WAVEFORM value SIGNAL_ID 125ns
+   svw agent WAVEFORM value SIGNAL_ID cycle:12@top.clk
+   svw agent WAVEFORM changes SIGNAL_ID 100ns 160ns 100 --format hex --same-time final
+   svw agent WAVEFORM when SIGNAL_ID 0x80000000 100ns 2us --format hex
    ```
+
+   `signal_value` also returns nullable `type_info`. When an adapter
+   supplies a packed struct or union schema, preserve its declared type,
+   dimensions, and `members`; each member contains its packed offset/range,
+   declared type, and bit-precise decoded value. An empty/null schema means the
+   source did not publish member metadata—do not infer member names from a flat
+   vector. After loading an mxsv semantic bundle, `signal_value` uses its
+   `design.astdb` packed type metadata too. Pass MCP `member`, or use the
+   one-shot direct field form, instead of hand-decoding bit ranges:
+
+   ```sh
+   svw agent WAVEFORM field-value BUNDLE top.cpu.id_ex.pc 200ns
+   ```
+
+   `signal_changes --format hex` adds `formatted`; `--same-time final` removes
+   delta glitches by retaining only the final write at each timestamp. `when`
+   performs the inverse first-match query and defaults to that final-value
+   policy. Use `--same-time all` only when transient delta writes are evidence.
 
 4. To show the waveform directly in the agent CLI, copy one to twelve exact full
    hierarchical `name` fields from the search result. Render those HIER names
@@ -56,7 +97,19 @@ available. Otherwise use the composable `svw agent` CLI below. Run
    ```sh
    svw agent WAVEFORM render 100 160 FULL_HIER_NAME [FULL_HIER_NAME ...] \
      --width 120 --height 24
+   svw agent WAVEFORM render 100ns 160ns top.clk top.cpu.pc --json \
+     --clock top.clk --format hex --samples 16
    ```
+
+   A full-view MCP render rejects a height that cannot contain every requested
+   trace. Correct it from `valid_range.minimum`; successful structured results
+   report `requested_signals`, `rendered_signals`, and
+   `signals_truncated=false`. JSON/MCP results also include `sample_text` and
+   typed `samples`: a bounded final-value table sampled at requested clock
+   rising edges, or at the earliest signal changes when no clock is supplied.
+   Read this table directly; `styled_text` is the corresponding frame for UI
+   presentation. The wave-only view grows to the required trace height and
+   returns the compact canvas height.
 
    In Pi, prefer the bundled `svw_wave_render` extension tool when it is
    available. Its `hier` array accepts the same exact HIER names together with
@@ -83,7 +136,8 @@ available. Otherwise use the composable `svw agent` CLI below. Run
    In DeepSeek Harness, prefer the bundled `svw_wave_render` plugin tool when
    it is installed. It takes the same arguments as the Pi extension tool and
    shows the same wave-only canvas as a colored terminal tool-result card;
-   the model receives only a bounded completion summary.
+   the model receives the bounded compact value table while the full canvas is
+   kept out of model text.
 
 Prefer a 100-160 column frame and a narrow time window so edges and bus labels
 remain legible. If the frame is crowded, render fewer signals or split the time
@@ -116,6 +170,15 @@ svw agent - design-info BUNDLE
 svw agent - design-objects BUNDLE top.cpu.reset variable 20
 svw agent - design-source BUNDLE DESIGN_OBJECT_ID 5
 ```
+
+`design_info.diagnostic_items` exposes the first 50 frontend diagnostics with
+severity, kind, message, and exact source location; retain
+`diagnostics_truncated` when more exist. If automatic hierarchy matching is
+insufficient, MCP `design_load` accepts replacement `remaps`
+(`design_prefix`/`wave_prefix`) and exact `aliases`
+(`design_selector`/`wave_path`). The load and mapping update are atomic. Verify
+the returned `xprobe_remaps`/`xprobe_aliases` counts and the later binding's
+`match`; never silently guess a prefix.
 
 Without a `kind` filter, object search returns one canonical,
 non-port-preferred object per elaborated path. Supply an exact `kind` to inspect
@@ -152,10 +215,13 @@ value breadth-first:
 ```sh
 svw agent WAVEFORM active-drivers BUNDLE DESIGN_OBJECT_ID TICK 0 7
 svw agent WAVEFORM trace-x BUNDLE DESIGN_OBJECT_ID TICK 0 7
+svw agent WAVEFORM trace-x BUNDLE SIGNAL_ID 200ns --member pc
 ```
 
 For MCP use the corresponding `design_drivers`, `design_loads`,
-`active_drivers`, and `trace_x` tools. Treat continuous/port
+`active_drivers`, and `trace_x` tools. `trace_x` accepts either a design object
+ID or a waveform signal ID mapped by the loaded cross-probe index; `member`
+selects its ASTDB packed field. Treat continuous/port
 `static-semantic` evidence as active structure. A procedural candidate is only
 active/inactive when `basis` is `mxw-runtime` and the waveform carries a
 validated complete runtime-write stream; VCD/FST correctly remains
