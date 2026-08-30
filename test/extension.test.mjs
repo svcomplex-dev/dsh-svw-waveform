@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   apply,
@@ -10,6 +11,8 @@ import {
   validateParams,
   visibleWidth,
 } from "../index.js";
+
+const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
 test("declares the expected Cordis services and tool", () => {
   assert.deepEqual(inject, ["tools"]);
@@ -37,12 +40,19 @@ test("accepts safe ANSI frames and rejects controls or oversized rows", () => {
 });
 
 test("projects the complete UI frame out of model text", () => {
+  const hasCompactValues = definition.output.schema.required.includes("sampleText");
   const value = {
     ansi: "UNIQUE_ANSI_PAYLOAD\n", waveform: "demo.vcd", start: 0, end: 10,
-    width: 80, height: 5, signals: 1, hier: ["top.clk"], wave: [], timeContext: null,
+    width: 80, height: 5, signals: 1, sampleText: "top.clk  1",
+    hier: ["top.clk"], wave: [], timeContext: null,
   };
   const content = definition.output.render({}, value);
-  assert.match(content[0].text, /intentionally not duplicated/);
+  if (hasCompactValues) {
+    assert.match(content[0].text, /Compact final values:\ntop\.clk  1/);
+  } else {
+    assert.equal(manifest.svwRelease, "release-0.1.1");
+    assert.match(content[0].text, /intentionally not duplicated/);
+  }
   assert.doesNotMatch(content[0].text, /UNIQUE_ANSI_PAYLOAD/);
   const meta = definition.output.presentationMeta({}, value);
   assert.equal(meta.ansi, "UNIQUE_ANSI_PAYLOAD\n");

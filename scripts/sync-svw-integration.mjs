@@ -18,6 +18,14 @@ function replaceRegexExactlyOnce(source, pattern, after, label) {
   return source.replace(pattern, after);
 }
 
+function replaceOneReviewedSite(source, sites, after, label) {
+  const matches = sites.filter((site) => source.includes(site));
+  if (matches.length !== 1) {
+    throw new Error(`expected exactly one ${label} transform site`);
+  }
+  return replaceExactlyOnce(source, matches[0], after, label);
+}
+
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -26,7 +34,7 @@ export function transformIntegration({ index, client, skill }) {
   let host = replaceExactlyOnce(
     index,
     'import { execFile } from "node:child_process";',
-    'import { execFile } from "node:child_process";\nimport { resolveSvwBinary } from "./lib/resolve-svw.js";',
+    'import { execFile } from "node:child_process";\nimport { resolveSvwBinary as resolvePackagedSvwBinary } from "./lib/resolve-svw.js";',
     "host resolver import",
   );
   host = replaceRegexExactlyOnce(
@@ -35,10 +43,13 @@ export function transformIntegration({ index, client, skill }) {
     'description: "VCD or FST waveform path",',
     "supported waveform description",
   );
-  host = replaceExactlyOnce(
+  host = replaceOneReviewedSite(
     host,
-    'const binary = process.env.SVW_BIN?.trim() || "svw";',
-    "const binary = resolveSvwBinary();",
+    [
+      'const binary = process.env.SVW_BIN?.trim() || "svw";',
+      "const binary = resolveSvwBinary();",
+    ],
+    "const binary = resolvePackagedSvwBinary();",
     "package-private binary resolver",
   );
 
@@ -55,8 +66,26 @@ export function transformIntegration({ index, client, skill }) {
     "browser module id",
   );
 
-  const adaptedSkill = replaceRegexExactlyOnce(
+  let adaptedSkill = replaceRegexExactlyOnce(
     skill,
+    /\n## FSDB inputs: install and activate the bridge first\n[\s\S]+?(?=\n## Workflow\n)/g,
+    "",
+    "FSDB bridge section",
+  );
+  adaptedSkill = replaceExactlyOnce(
+    adaptedSkill,
+    "When an FSDB/adapter",
+    "When an adapter",
+    "typed adapter wording",
+  );
+  adaptedSkill = replaceRegexExactlyOnce(
+    adaptedSkill,
+    /\nAn FSDB bridge activation\/configuration failure[\s\S]+?the FSDB path is not recovery\.\n/g,
+    "",
+    "FSDB recovery paragraph",
+  );
+  adaptedSkill = replaceRegexExactlyOnce(
+    adaptedSkill,
     /validated complete runtime-write stream; VCD\/FST\/[^\n]+ correctly remains/g,
     "validated complete runtime-write stream; VCD/FST correctly remains",
     "skill waveform description",

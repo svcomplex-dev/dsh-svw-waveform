@@ -52,7 +52,11 @@ invariant((await readFile(join(root, "cordis.patch.yml"), "utf8")).includes("nam
   "bundle patch does not load this package");
 invariant((await readFile(join(root, "client.cjs"), "utf8")).includes('id: "dsh-svw-waveform"'),
   "browser module id does not match this package");
-invariant((await readFile(join(root, "index.js"), "utf8")).includes("resolveSvwBinary()"),
+const host = await readFile(join(root, "index.js"), "utf8");
+const usesPackagedResolver = host.includes("resolvePackagedSvwBinary()");
+const reviewedLegacyResolver = manifest.svwRelease === "release-0.1.1" &&
+  host.includes("resolveSvwBinary()");
+invariant(usesPackagedResolver || reviewedLegacyResolver,
   "host plugin does not use the package-private binary resolver");
 
 for (const [platform, directory, provenance] of [
