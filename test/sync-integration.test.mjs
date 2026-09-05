@@ -6,19 +6,29 @@ const client = 'analysis. Keeps rendering format-agnostic — VCD/FST/VENDOR_A/V
   'id: "svw-dsh-waveform",\n';
 const skill = `header
 
-## FSDB inputs: install and activate the bridge first
+## FSDB inputs: activate the supported reader bridge
 
 FSDB setup
 
 ## Workflow
 
-When an FSDB/adapter supplies a packed struct.
+Typed transaction/assertion/event records require an adapter-provided semantic signal.
 
 An FSDB bridge activation/configuration failure is missing.
-the FSDB path is not recovery.
+replacing or editing the waveform is not recovery.
 
 validated complete runtime-write stream; VCD/FST/VENDOR_A correctly remains
 `;
+const legacySkill = skill.replace(
+  "activate the supported reader bridge",
+  "install and activate the bridge first",
+).replace(
+  "Typed transaction/assertion/event records require an adapter-provided semantic signal.",
+  "When an FSDB/adapter supplies a packed struct.",
+).replace(
+  "replacing or editing the waveform is not recovery.",
+  "the FSDB path is not recovery.",
+);
 
 test("adapts the current packaged resolver without stripping its source implementation", () => {
   const result = transformIntegration({
@@ -35,15 +45,16 @@ test("adapts the current packaged resolver without stripping its source implemen
   assert.doesNotMatch(`${result.host}${result.browser}${result.skill}`, /VENDOR_A|VENDOR_B|FSDB/);
 });
 
-test("still accepts the reviewed legacy resolver source", () => {
+test("still accepts the reviewed legacy resolver and FSDB heading", () => {
   const result = transformIntegration({
     index: 'import { execFile } from "node:child_process";\n' +
       'description: "VCD, FST, VENDOR_A, or VENDOR_B waveform path",\n' +
       'const binary = process.env.SVW_BIN?.trim() || "svw";\n',
     client,
-    skill,
+    skill: legacySkill,
   });
   assert.match(result.host, /resolvePackagedSvwBinary\(\)/);
+  assert.doesNotMatch(result.skill, /FSDB/);
 });
 
 test("upstream drift fails closed", () => {

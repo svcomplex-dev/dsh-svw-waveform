@@ -26,6 +26,18 @@ function replaceOneReviewedSite(source, sites, after, label) {
   return replaceExactlyOnce(source, matches[0], after, label);
 }
 
+function replaceOrAcceptExactlyOnce(source, before, after, accepted, label) {
+  const count = (value) => source.split(value).length - 1;
+  const beforeCount = count(before);
+  const acceptedCount = count(accepted);
+  if (beforeCount + acceptedCount !== 1) {
+    throw new Error(`expected exactly one ${label} transform site`);
+  }
+  return beforeCount === 1
+    ? replaceExactlyOnce(source, before, after, label)
+    : source;
+}
+
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -68,19 +80,20 @@ export function transformIntegration({ index, client, skill }) {
 
   let adaptedSkill = replaceRegexExactlyOnce(
     skill,
-    /\n## FSDB inputs: install and activate the bridge first\n[\s\S]+?(?=\n## Workflow\n)/g,
+    /\n## FSDB inputs: (?:install and activate the bridge first|activate the supported reader bridge)\n[\s\S]+?(?=\n## Workflow\n)/g,
     "",
     "FSDB bridge section",
   );
-  adaptedSkill = replaceExactlyOnce(
+  adaptedSkill = replaceOrAcceptExactlyOnce(
     adaptedSkill,
     "When an FSDB/adapter",
     "When an adapter",
+    "Typed transaction/assertion/event records require an adapter-provided semantic",
     "typed adapter wording",
   );
   adaptedSkill = replaceRegexExactlyOnce(
     adaptedSkill,
-    /\nAn FSDB bridge activation\/configuration failure[\s\S]+?the FSDB path is not recovery\.\n/g,
+    /\nAn FSDB bridge activation\/configuration failure[\s\S]+?(?:the FSDB path|replacing\s+or\s+editing\s+the\s+waveform) is not recovery\.\n/g,
     "",
     "FSDB recovery paragraph",
   );
