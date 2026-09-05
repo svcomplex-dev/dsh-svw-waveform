@@ -15,10 +15,29 @@ permissions:
   id-token: write
 
 env:
-  SVW_RELEASE_TAG: ${{ github.event.client_payload.tag || inputs.svw_release }}
+  SVW_RELEASE_INPUT: ${{ github.event.client_payload.tag || inputs.svw_release }}
 
 jobs:
+  resolve-release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - name: Normalize and validate release input
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(printf '%s' "$SVW_RELEASE_INPUT" |
+            sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          if [[ ! "$tag" =~ ^release-(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "invalid SVW release tag" >&2
+            exit 1
+          fi
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+
   verify-platform:
+    needs: resolve-release
     strategy:
       fail-fast: false
       matrix:
@@ -28,13 +47,10 @@ jobs:
           - runner: macos-15
             platform: macos-arm64
     runs-on: ${{ matrix.runner }}
+    env:
+      SVW_RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
     steps:
       - uses: actions/checkout@v6
-      - name: Validate release input
-        shell: bash
-        run: |
-          set -eu
-          printf '%s\n' "$SVW_RELEASE_TAG" | grep -Eq '^release-(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
       - name: Import, smoke test, and audit SVW
         shell: bash
         env:
@@ -48,8 +64,10 @@ jobs:
           retention-days: 1
 
   publish:
-    needs: verify-platform
+    needs: [resolve-release, verify-platform]
     runs-on: ubuntu-latest
+    env:
+      SVW_RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}
     steps:
       - uses: actions/checkout@v6
         with:

@@ -4,6 +4,19 @@ import test from "node:test";
 
 const workflow = await readFile(new URL("../.github/workflows/publish.yml", import.meta.url), "utf8");
 
+test("manual and repository release inputs normalize before every consumer", () => {
+  assert.match(workflow, /SVW_RELEASE_INPUT:/);
+  assert.match(workflow, /Normalize and validate release input/);
+  assert.match(workflow, /sed -e 's\/\^\[\[:space:\]\]\*\/\/'/);
+  assert.match(workflow, /printf 'tag=%s\\n' "\$tag" >> "\$GITHUB_OUTPUT"/);
+  assert.match(workflow, /verify-platform:\n    needs: resolve-release/);
+  assert.match(workflow, /publish:\n    needs: \[resolve-release, verify-platform\]/);
+  assert.equal(
+    workflow.match(/SVW_RELEASE_TAG: \$\{\{ needs\.resolve-release\.outputs\.tag \}\}/g)?.length,
+    2,
+  );
+});
+
 test("release preparation fails closed before repository or registry publication", () => {
   const prepare = workflow.indexOf("node scripts/prepare-svw-release.mjs");
   const sync = workflow.indexOf("node scripts/sync-svw-integration.mjs");
