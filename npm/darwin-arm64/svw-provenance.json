@@ -1,6 +1,6 @@
 {
-  "svwRelease": "release-0.1.4",
-  "asset": "svw-release-0.1.4-macos-arm64.tar.gz",
-  "archiveSha256": "727010698dcfb87214d3a7f4151ac7e139e9caf573d0b8b09b33944155cc4c7a",
-  "binarySha256": "eaaa1241a4b4766aa942d9a9d40217fbf4a34b23395c27d6a1cb1c413683c742"
+  "svwRelease": "release-0.1.5",
+  "asset": "svw-release-0.1.5-macos-arm64.tar.gz",
+  "archiveSha256": "fc74d4eac4e2964a6865169bfc1fb20459c1abfa424ba873e487154fb5016a69",
+  "binarySha256": "b7f6414943b5c4f95aa23444d8ebb6f8862400cabc304e3ccd3ecc06c3e9abce"
 }

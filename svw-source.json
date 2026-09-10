@@ -1,6 +1,6 @@
 {
-  "release": "release-0.1.4",
-  "asset": "svw-release-0.1.4-linux-x64.tar.gz",
+  "release": "release-0.1.5",
+  "asset": "svw-release-0.1.5-linux-x64.tar.gz",
   "files": {
     "index.js": "89953639f7fc2537510b182347a48cbf0d74d625966b1444747fcd099272448d",
     "client.cjs": "d6cb025247fa90123314aa7ca796aa06b69dedb076e30b519f6a88566510147c",

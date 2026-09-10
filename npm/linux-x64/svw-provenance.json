@@ -1,6 +1,6 @@
 {
-  "svwRelease": "release-0.1.4",
-  "asset": "svw-release-0.1.4-linux-x64.tar.gz",
-  "archiveSha256": "3003233cabca0e140996011ca06369fc0732fdc93c6fc5e01bcd969a2bc4dca2",
-  "binarySha256": "7414eccc0ec85c6a96f433615c87f7a530151de43c83459254710a02504b6d52"
+  "svwRelease": "release-0.1.5",
+  "asset": "svw-release-0.1.5-linux-x64.tar.gz",
+  "archiveSha256": "8af5aba9ca35a4b32bab141e5c4b44fff274ed431abd90cbe72388b094c818f9",
+  "binarySha256": "a16c011cb3e4f1f29624e984e8433ef0ac823355f52ab5b9b119a94c4411bcfa"
 }
